@@ -1,8 +1,22 @@
 
 
+## --- VPS ---
+
+# Inject to Debian VPS:
+scp ~/.bashrc own:/home/admin/.bashrc
+# (own being a registered host)
+
+
+# The generic command is:
+cp ~/.bashrc user@vps-ip:/home/user/.bashrc@vps-ip:/home/user/.bashrc
+
+
+
+
+## --- DOCKER ---
+
 # Direct inline injection:
 docker run -it -v ~/.bashrc:/root/.bashrc debian:trixie bash
-
 
 
 
@@ -16,7 +30,6 @@ docker exec -i test-deb13 bash -c 'cat > /root/.bashrc' < ~/.bashrc
 
 # 3. Open a shell to verify
 docker exec -it test-deb13 bash
-
 
 
 
