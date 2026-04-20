@@ -101,6 +101,7 @@ ls() {
   fi
 }
 
+# --- PROMPT_START ---
 # Disable history expansion to prevent ! interpretation
 set +H 2>/dev/null
 
