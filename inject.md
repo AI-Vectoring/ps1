@@ -35,5 +35,5 @@ docker exec -it test-deb13 bash
 
 
 
-#For Dockerfile
+# For Dockerfile
 COPY .bashrc /root/.bashrc
