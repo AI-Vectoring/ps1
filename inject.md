@@ -10,6 +10,8 @@ scp ~/.bashrc own:/home/admin/.bashrc
 # The generic command is:
 cp ~/.bashrc user@vps-ip:/home/user/.bashrc@vps-ip:/home/user/.bashrc
 
+# Load with:
+source ~/.bashrc
 
 
 
