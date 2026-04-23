@@ -1,9 +1,30 @@
-vps shows IP, not server name
-container shows CID, not containername
-create GH repo
-revise full code with gemini
-change license
-revise PS1 readme
-create new full readme
-separate ps1 from bashrc?
-add ps1 --help??
+
+
+### Injecting to Remote Targets
+
+
+ps1 can be deployed to remote machines from your local 
+workstation without logging in first:
+
+
+```bash
+ps1 vps -n prod-server admin@192.168.1.100   # inject to a 
+VPS via SSH
+ps1 docker -n dev-db my-container-id         # inject into 
+a running Docker container
+```
+
+
+These commands copy `ps1` and its logic to the target, add 
+the source line to the target's `.bashrc`, and write the 
+display name to `~/.ps1_hostname` on the target. The same 
+two-line `.bashrc` pattern is used everywhere.
+
+
+> **Note**: `ps1 vps` and `ps1 docker` are not yet 
+implemented. Tracked in `tasks`.
+
+
+---
+
+does the readme contain a table of available commands?
