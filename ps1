@@ -154,39 +154,129 @@ write_hostname_file() {
     log_info "Set name to '$1'"
 }
 
+inject_vps() {
+    local target="$1"
+    local name="$2"
+
+    [[ ! -f "$PS1_PATH" ]] && { log_error "ps1 not installed at $PS1_PATH"; exit 1; }
+    command -v ssh >/dev/null 2>&1 || { log_error "ssh not found"; exit 1; }
+    command -v scp >/dev/null 2>&1 || { log_error "scp not found"; exit 1; }
+
+    log_info "Injecting ps1 to $target..."
+    ssh "$target" "mkdir -p ~/.local/bin" || { log_error "SSH connection to $target failed"; exit 1; }
+    scp -q "$PS1_PATH" "$target:~/.local/bin/ps1" || { log_error "scp to $target failed"; exit 1; }
+    ssh "$target" "chmod +x ~/.local/bin/ps1"
+
+    ssh "$target" bash << 'REMOTE_INJECT'
+PS1_PATH="$HOME/.local/bin/ps1"
+BASHRC="$HOME/.bashrc"
+if grep -qF "source \"$PS1_PATH\" 2>/dev/null" "$BASHRC" 2>/dev/null; then
+    echo "[INFO] ps1 already in .bashrc"
+else
+    printf '\n# ps1 prompt — https://github.com/AI-Vectoring/ps1\nsource "%s" 2>/dev/null\n' "$PS1_PATH" >> "$BASHRC"
+    echo "[INFO] Added ps1 to .bashrc"
+fi
+REMOTE_INJECT
+
+    if [[ -n "$name" ]]; then
+        printf '%s\n' "$name" | ssh "$target" "cat > ~/.ps1_hostname"
+        log_info "Set display name to '$name' on $target"
+    fi
+    log_info "Injected ps1 to $target — open a new shell or run: source ~/.local/bin/ps1"
+}
+
+inject_docker() {
+    local container="$1"
+    local name="$2"
+
+    [[ ! -f "$PS1_PATH" ]] && { log_error "ps1 not installed at $PS1_PATH"; exit 1; }
+    command -v docker >/dev/null 2>&1 || { log_error "docker not found"; exit 1; }
+    docker inspect "$container" &>/dev/null || { log_error "Container '$container' not found or not running"; exit 1; }
+
+    log_info "Injecting ps1 into container $container..."
+
+    local home_dir
+    home_dir=$(docker exec "$container" bash -c 'printf "%s" "$HOME"' 2>/dev/null)
+    [[ -z "$home_dir" ]] && home_dir="/root"
+
+    docker exec "$container" mkdir -p "$home_dir/.local/bin" || { log_error "Failed to create dir in container"; exit 1; }
+    docker cp "$PS1_PATH" "$container:$home_dir/.local/bin/ps1" || { log_error "docker cp failed"; exit 1; }
+    docker exec "$container" chmod +x "$home_dir/.local/bin/ps1"
+
+    local remote_ps1="$home_dir/.local/bin/ps1"
+    local remote_bashrc="$home_dir/.bashrc"
+    docker exec "$container" bash -c "
+        if grep -qF 'source \"${remote_ps1}\" 2>/dev/null' '${remote_bashrc}' 2>/dev/null; then
+            echo '[INFO] ps1 already in .bashrc in container'
+        else
+            printf '\n# ps1 prompt — https://github.com/AI-Vectoring/ps1\nsource \"%s\" 2>/dev/null\n' '${remote_ps1}' >> '${remote_bashrc}'
+            echo '[INFO] Added ps1 to .bashrc in container'
+        fi
+    "
+
+    if [[ -n "$name" ]]; then
+        printf '%s\n' "$name" | docker exec -i "$container" bash -c "cat > $home_dir/.ps1_hostname"
+        log_info "Set display name to '$name' in container $container"
+    fi
+    log_info "Injected ps1 to container $container — start a new shell or run: source $remote_ps1"
+}
+
 ACTION="help"
 NAME=""
+TARGET=""
 EXPLICIT_ACTION=0
 
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        -n|--name)
-            [[ -z "${2:-}" ]] && { log_error "--name requires a value"; exit 1; }
-            NAME="$2"
-            shift 2
-            ;;
-        -u|--update)
-            ACTION="update"; EXPLICIT_ACTION=1; shift ;;
-        --remove)
-            ACTION="remove"; EXPLICIT_ACTION=1; shift ;;
-        --uninstall)
-            ACTION="uninstall"; EXPLICIT_ACTION=1; shift ;;
-        -p|--permanent)
-            ACTION="permanent"; EXPLICIT_ACTION=1; shift ;;
-        --help|-h)
-            ACTION="help"; shift ;;
-        *)
-            log_error "Unknown option: $1"
-            exit 1
-            ;;
-    esac
-done
+if [[ "${1:-}" == "vps" || "${1:-}" == "docker" ]]; then
+    ACTION="$1"
+    EXPLICIT_ACTION=1
+    shift
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -n|--name)
+                [[ -z "${2:-}" ]] && { log_error "--name requires a value"; exit 1; }
+                NAME="$2"; shift 2 ;;
+            *) TARGET="$1"; shift ;;
+        esac
+    done
+else
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -n|--name)
+                [[ -z "${2:-}" ]] && { log_error "--name requires a value"; exit 1; }
+                NAME="$2"
+                shift 2
+                ;;
+            -u|--update)
+                ACTION="update"; EXPLICIT_ACTION=1; shift ;;
+            --remove)
+                ACTION="remove"; EXPLICIT_ACTION=1; shift ;;
+            --uninstall)
+                ACTION="uninstall"; EXPLICIT_ACTION=1; shift ;;
+            -p|--permanent)
+                ACTION="permanent"; EXPLICIT_ACTION=1; shift ;;
+            --help|-h)
+                ACTION="help"; shift ;;
+            *)
+                log_error "Unknown option: $1"
+                exit 1
+                ;;
+        esac
+    done
 
-[[ -n "$NAME" && $EXPLICIT_ACTION -eq 0 ]] && ACTION="name_only"
+    [[ -n "$NAME" && $EXPLICIT_ACTION -eq 0 ]] && ACTION="name_only"
+fi
 
 case "$ACTION" in
     name_only)
         write_hostname_file "$NAME"
+        ;;
+    vps)
+        [[ -z "$TARGET" ]] && { log_error "Usage: ps1 vps <user@host> [-n <name>]"; exit 1; }
+        inject_vps "$TARGET" "$NAME"
+        ;;
+    docker)
+        [[ -z "$TARGET" ]] && { log_error "Usage: ps1 docker <container-id> [-n <name>]"; exit 1; }
+        inject_docker "$TARGET" "$NAME"
         ;;
     update)
         log_info "Updating ps1..."
@@ -240,13 +330,15 @@ case "$ACTION" in
 ps1 - Git & GitHub Sync-Aware Bash Prompt
 
 Usage:
-  source ps1             Activate prompt in current session
-  ps1 -n <name>          Set display name for this machine
-  ps1 -u                 Update from GitHub
-  ps1 -p                 Add to .bashrc
-  ps1 --remove           Remove from .bashrc only
-  ps1 --uninstall        Remove completely
-  ps1 --help             Show this help
+  source ps1                       Activate prompt in current session
+  ps1 -n <name>                    Set display name for this machine
+  ps1 -u                           Update from GitHub
+  ps1 -p                           Add to .bashrc
+  ps1 --remove                     Remove from .bashrc only
+  ps1 --uninstall                  Remove completely
+  ps1 vps <user@host> [-n <name>]   Inject ps1 to a remote VPS via SSH
+  ps1 docker <id> [-n <name>]      Inject ps1 into a running Docker container
+  ps1 --help                       Show this help
 HELPTEXT
         ;;
 esac

@@ -97,6 +97,8 @@ Once installed, `ps1` can be run directly:
 | `ps1 -p` | Add to `.bashrc` |
 | `ps1 --remove` | Strip from `.bashrc`, keep command |
 | `ps1 --uninstall` | Remove completely |
+| `ps1 vps <user@host> [-n <name>]` | Inject ps1 to a remote VPS via SSH |
+| `ps1 docker <id> [-n <name>]` | Inject ps1 into a running Docker container |
 | `ps1 --help` | Show help |
 
 ---
@@ -125,8 +127,6 @@ ps1 docker -n dev-db my-container-id         # inject into a running Docker cont
 ```
 
 These commands copy `ps1` and its logic to the target, add the source line to the target's `.bashrc`, and write the display name to `~/.ps1_hostname` on the target. The same two-line `.bashrc` pattern is used everywhere.
-
-> **Note**: `ps1 vps` and `ps1 docker` are not yet implemented. Tracked in `tasks`.
 
 ---
 
